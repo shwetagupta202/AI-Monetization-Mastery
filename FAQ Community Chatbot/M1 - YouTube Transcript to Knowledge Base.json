@@ -1,0 +1,426 @@
+{
+  "name": "M1 - YouTube Transcript to Knowledge Base",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "6d3b2596-9443-4520-8ade-1fbbbe4898dd",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "15uYBizOc1M9z7MqFP4FKqHVA4QyuFy-1KYlE-YdDQ2E",
+          "mode": "list",
+          "cachedResultName": "youtube_knowledge_base",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15uYBizOc1M9z7MqFP4FKqHVA4QyuFy-1KYlE-YdDQ2E/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1556457873,
+          "mode": "list",
+          "cachedResultName": "youtube_knowledge_base.csv",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15uYBizOc1M9z7MqFP4FKqHVA4QyuFy-1KYlE-YdDQ2E/edit#gid=1556457873"
+        },
+        "options": {}
+      },
+      "id": "ee33410f-ebf6-45ce-ab5c-c1f2b97c978f",
+      "name": "Read Video Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "foiJQYQif5TvfAyb",
+          "name": "Google Sheets business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json[\"Transcript Status\"] }}",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3f84d605-403c-49fe-baed-299612a27be6",
+      "name": "Only Pending Rows",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const url = $json['Video URL'] || $json.videoUrl || '';\nconst title = $json['Video Title'] || '';\nconst m = url.match(/(?:v=|\\/shorts\\/|youtu\\.be\\/|\\/embed\\/)([A-Za-z0-9_-]{11})/);\nconst videoId = m ? m[1] : '';\nreturn { json: { videoUrl: url, videoTitle: title, videoId } };"
+      },
+      "id": "ec004929-3f91-4fbd-b12e-28df47928072",
+      "name": "Extract Video ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://youtube-transcript3.p.rapidapi.com/api/transcript?videoId={{ $json.videoId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        }
+      },
+      "id": "4ff9c23d-648b-42cf-9804-49abf5ae4867",
+      "name": "Get Transcript",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FjmTf5K8WanpJ3Qe",
+          "name": "KIE _Amlesh"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Extract Video ID').item.json;\nconst r = $json;\nlet raw = '';\nif (Array.isArray(r.transcript)) raw = r.transcript.map(s => s.text || s.subtitle || '').join(' ');\nelse if (Array.isArray(r)) raw = r.map(s => s.text || '').join(' ');\nelse if (typeof r.transcript === 'string') raw = r.transcript;\nelse if (typeof r.text === 'string') raw = r.text;\nelse raw = JSON.stringify(r);\nconst clean = raw\n  .replace(/\\[\\d{1,2}:\\d{2}(:\\d{2})?\\]/g, '')\n  .replace(/\\d{1,2}:\\d{2}(:\\d{2})?/g, '')\n  .replace(/<[^>]+>/g, '')\n  .replace(/[^\\w\\s.,?!'\"-]/g, ' ')\n  .replace(/[ \\t]+/g, ' ')\n  .replace(/\\n\\s*\\n/g, '\\n')\n  .trim();\nreturn { json: { videoUrl: meta.videoUrl, videoTitle: meta.videoTitle, videoId: meta.videoId, cleanTranscript: clean } };"
+      },
+      "id": "bba7f132-dd6b-4c2d-b4b4-590fa241ca74",
+      "name": "Clean Transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1hkMaUXVG2zqIa8VbyWjs3kDvjWuDlEDsxXRPJsItwFY",
+          "mode": "list",
+          "cachedResultName": "faq_analytics",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hkMaUXVG2zqIa8VbyWjs3kDvjWuDlEDsxXRPJsItwFY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 647825087,
+          "mode": "list",
+          "cachedResultName": "faq_analytics.csv",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hkMaUXVG2zqIa8VbyWjs3kDvjWuDlEDsxXRPJsItwFY/edit#gid=647825087"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [
+            "Video URL"
+          ],
+          "schema": [
+            {
+              "id": "question",
+              "displayName": "question",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "answer",
+              "displayName": "answer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "asked_at",
+              "displayName": "asked_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "05fda409-1a73-40b4-ad02-65251d1fbb47",
+      "name": "Mark Completed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1328,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "foiJQYQif5TvfAyb",
+          "name": "Google Sheets business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "mode": "list",
+          "value": "community-kb",
+          "cachedResultName": "community-kb"
+        },
+        "options": {}
+      },
+      "id": "002958b0-a323-4857-be2c-f05f00ae9f3d",
+      "name": "Store In Pinecone",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        1552,
+        0
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "rdXJwqPkCbHZj9oE",
+          "name": "PineconeApi Amlesh"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "228ff42c-782e-492e-b664-e7b5c9fc9dbd",
+      "name": "OpenAI Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "7LCugiM44qrBkn12",
+          "name": "Paid SS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $('Clean Transcript').item.json.cleanTranscript }}",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "video_title",
+                "value": "={{ $('Clean Transcript').item.json.videoTitle }}"
+              },
+              {
+                "name": "video_url",
+                "value": "={{ $('Clean Transcript').item.json.videoUrl }}"
+              },
+              {
+                "name": "video_id",
+                "value": "={{ $('Clean Transcript').item.json.videoId }}"
+              },
+              {
+                "name": "source",
+                "value": "youtube"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a78c91c8-062e-4dd8-8c51-d2698dcf1c3b",
+      "name": "Transcript Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        224
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Read Video Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Video Rows": {
+      "main": [
+        [
+          {
+            "node": "Only Pending Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Pending Rows": {
+      "main": [
+        [
+          {
+            "node": "Extract Video ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Video ID": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript": {
+      "main": [
+        [
+          {
+            "node": "Clean Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Transcript": {
+      "main": [
+        [
+          {
+            "node": "Mark Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Completed": {
+      "main": [
+        [
+          {
+            "node": "Store In Pinecone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings": {
+      "ai_embedding": [
+        []
+      ]
+    },
+    "Transcript Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Store In Pinecone",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "86b2d633-c54f-4845-8112-fd6cdfb5d7ae",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e99e0d1157c9445a053edb1d8bcb3c19869f806f2b50808813faa4f314de9dd4"
+  },
+  "id": "GgwxG2CQVxeXRnqR",
+  "tags": []
+}

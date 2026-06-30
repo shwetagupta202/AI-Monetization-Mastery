@@ -1,0 +1,382 @@
+{
+  "name": "M2 - Community FAQ AI Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hi! Ask me anything covered in our workshops and videos.",
+        "options": {
+          "inputPlaceholder": "e.g. How do I run Meta Ads?",
+          "subtitle": "Answers from our video library",
+          "title": "Community FAQ Assistant",
+          "responseMode": "lastNode"
+        }
+      },
+      "id": "187525bc-4fbf-46fd-9d70-8f843b42886d",
+      "name": "Community Chat",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "1171a0ea-3f55-42a1-ba99-a71017bd9aa3"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are an AI Community Assistant. Always use the \"Knowledge Base\" tool to search the transcript knowledge base before answering. Answer ONLY from the retrieved transcript content. If the information is not available in the knowledge base, respond exactly with: \"I could not find this information in the training material.\" Never hallucinate or use outside knowledge. Always give a concise, actionable answer and, when relevant, mention which workshop or video it came from."
+        }
+      },
+      "id": "48cf7822-d1a5-4895-87a6-05f03ffadee6",
+      "name": "Community FAQ Assistant",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o",
+          "cachedResultName": "gpt-4o"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "df27066d-8998-49c0-a8a4-4ae360d22eba",
+      "name": "GPT Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        272
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "7LCugiM44qrBkn12",
+          "name": "Paid SS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "5f282ca5-5405-4d6f-8c0e-2caa82512a67",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        400,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search the workshop and video transcript knowledge base. Use this for every question to find relevant content before answering.",
+        "pineconeIndex": {
+          "__rl": true,
+          "mode": "list",
+          "value": "community-kb",
+          "cachedResultName": "community-kb"
+        },
+        "topK": 5,
+        "options": {}
+      },
+      "id": "69f1a328-292b-4326-944d-f19767bfc8dc",
+      "name": "Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        624,
+        240
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "rdXJwqPkCbHZj9oE",
+          "name": "PineconeApi Amlesh"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "b0fd863b-d8ab-4f6f-8b67-b18cd039afab",
+      "name": "Query Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        432
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "7LCugiM44qrBkn12",
+          "name": "Paid SS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "faq_analytics",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "question": "={{ $('Community Chat').item.json.chatInput }}",
+            "answer": "={{ $('Community FAQ Assistant').item.json.output }}",
+            "session_id": "={{ $('Community Chat').item.json.sessionId }}",
+            "asked_at": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "f3594d2a-0c92-406f-9a21-63ddc248321d",
+      "name": "Log Q&A",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        688,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "u1",
+              "leftValue": "={{ $('Community FAQ Assistant').item.json.output }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              },
+              "rightValue": "could not find this information"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "92f14fbc-b66c-4f92-9930-1491bdd6be0b",
+      "name": "Unanswered?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        864,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_ADMIN_CHAT_ID",
+        "text": "=⚠️ Unanswered community question:\n\n{{ $('Community Chat').item.json.chatInput }}\n\nSession: {{ $('Community Chat').item.json.sessionId }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "481d854e-3737-418b-9435-97638314ba8a",
+      "name": "Alert Admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1088,
+        -128
+      ],
+      "webhookId": "8043fa37-38d9-4b64-bd6d-ed71d4efb73d",
+      "credentials": {
+        "telegramApi": {
+          "id": "2K1U94bOOdjx8eZs",
+          "name": "Amlesh_Lead_Agent_Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "output",
+              "value": "={{ $('Community FAQ Assistant').item.json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "86758c96-f620-4651-80d2-5908588e428c",
+      "name": "Return Answer A",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1312,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r2",
+              "name": "output",
+              "value": "={{ $('Community FAQ Assistant').item.json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "68e0a5de-d4c1-402d-bb4c-7519efb50847",
+      "name": "Return Answer B",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1088,
+        128
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Community Chat": {
+      "main": [
+        [
+          {
+            "node": "Community FAQ Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Community FAQ Assistant": {
+      "main": [
+        [
+          {
+            "node": "Log Q&A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Community FAQ Assistant",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Community FAQ Assistant",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "Community FAQ Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Q&A": {
+      "main": [
+        [
+          {
+            "node": "Unanswered?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unanswered?": {
+      "main": [
+        [
+          {
+            "node": "Alert Admin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Answer B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Admin": {
+      "main": [
+        [
+          {
+            "node": "Return Answer A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "11723f37-f8ec-481c-ad1b-bb9e23017426",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "e99e0d1157c9445a053edb1d8bcb3c19869f806f2b50808813faa4f314de9dd4"
+  },
+  "id": "cNuwKNITV619d1at",
+  "tags": []
+}
